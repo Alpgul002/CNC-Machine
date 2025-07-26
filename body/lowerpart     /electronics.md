@@ -1,156 +1,95 @@
-Elektronik için linuxcnc ve mesa kartı ile step motorlar düşünürken, mesa kartının pahalı olması ve tr de olmaması nedeniyle projenin elektroniğini değiştirme kararı aldım.
+https://gemini.google.com/u/2/app/81dee80d69701a28
 
 
+Proje Raporu: IoT Destekli Akıllı CNC Sistemi
+Proje Başlığı: Raspberry Pi ve LinuxCNC Tabanlı, Donanım Korumalı ve Uzaktan Erişimli Modüler CNC Kontrol Sistemi
 
-**CNC Sistemi Mühendislik El Kitabı**
+Hazırlayan: Gemini (Deniz'in Projesi Üzerine Geliştirilmiştir)
 
-**Proje Başlığı**: Raspberry Pi + LinuxCNC (pigpio HAL) Tabanlı, Yerel Ekran ve Uzaktan G-code Erişimli IoT Destekli Akıllı CNC Sistemi
-**Hazırlayan**: Deniz
-**Tarih**: Temmuz 2025
+Tarih: 26 Temmuz 2025
 
----
+1. Giriş ve Proje Amacı
+Bu proje raporu; düşük maliyetli, yüksek performanslı ve modern bağlantı özelliklerine sahip 3 eksenli bir CNC makinesinin kontrol sistemi tasarımını detaylandırmaktadır. Projenin temel amacı, piyasadaki pahalı ve kapalı kaynaklı kontrol kartlarına bir alternatif olarak, Raspberry Pi 4'ün işlem gücünü ve LinuxCNC'nin endüstriyel standartlardaki yeteneklerini bir araya getirmektir.
 
-## 1. Donanım Kısmı
+Sistem, harici bir "breakout kartı" ihtiyacını minimuma indirerek, sinyal güvenilirliğini bir tampon entegre ile sağlayan, hem yerel bir dokunmatik ekranla (HMI) hem de ağ üzerinden uzaktan (IoT) yönetilebilen esnek bir mimari sunar.
 
-### 1.1. Parça Listesi ve Adetleri
+2. Sistem Mimarisi
+Kontrol sistemi üç ana katmandan oluşur:
 
-| Bileşen                                 | Model / Tip               | Adet | Açıklama                                            |
-| --------------------------------------- | ------------------------- | ---- | --------------------------------------------------- |
-| Raspberry Pi 4 Model B (4GB)            | SBC                       | 1    | PREEMPT\_RT kernel, pigpio HAL, LinuxCNC barındırır |
-| microSD Kart (32GB veya üzeri)          | UHS-I, Class 10           | 1    | OS ve yazılım imajları için                         |
-| TB6600 Step Motor Sürücü                | Opto-izolatörlü           | 3    | X, Y, Z eksenleri için                              |
-| NEMA 23 Step Motor                      | 3.0 Nm, 4 kablolu bipolar | 3    | X, Y, Z eksen hareketi                              |
-| Limit Switch (NC tipi)                  | Mekanik NC switch         | 6    | Her eksenin +/– uçlarında güvenlik                  |
-| Endüstriyel Güç Kaynağı (PSU)           | 24 V, 10 A                | 1    | TB6600 sürücüler için güç                           |
-| 5 V DC Regülatör / USB adaptör          | 5 V, 2 A                  | 1    | Pi’yi beslemek için                                 |
-| Shielded Twisted-Pair Kablo             | 26 AWG                    | 8 m  | STEP/DIR/ENA sinyalleri                             |
-| Çift Damarlı Kablo                      | 24 AWG                    | 5 m  | Limit switch hatları                                |
-| Tek Damarlı Kablo                       | ≥1.5 mm²                  | 2 m  | 24 V PSU güç hattı                                  |
-| Vida Tipi Terminal Bloğu (8 kutup)      | DIN ray montajlı          | 2    | Kablolama düzeni                                    |
-| M2.5-M3 Klemens                         | 5 mm adım aralıklı        | 20   | Elektrik bağlantı noktaları                         |
-| Perf-board (Delikli devre)              | UV-fırınlanmış            | 1    | Harici pull-up devresi                              |
-| Direnç (10 kΩ, SIP8 paketi)             | Pull-up array             | 1    | Harici +5 V pull-up için                            |
-| Somun, Pul ve Kablo Bağlama Malzemeleri | —                         | —    | Montaj ve kablo düzeni                              |
+Elektronik Donanım Katmanı: Güç kaynakları, motorlar, sürücüler, sensörler ve sistemi elektriksel gürültü ve hatalardan koruyan arayüz bileşenlerini içerir.
 
-### 1.2. GPIO Pin Bağlantıları (BCM Numarasını Kullanarak)
+Yazılım ve Gerçek Zamanlı Kontrol Katmanı: Standart bir işletim sistemini, hassas zamanlama gerektiren görevler için gerçek zamanlı bir çekirdek (kernel), CNC görevlerini yürüten ana kontrol yazılımı ve bu yazılımın donanımla haberleşmesini sağlayan sürücüleri kapsar.
 
-| Fonksiyon          | Eksen | BCM GPIO | Açıklama                                      |
-| ------------------ | ----- | -------- | --------------------------------------------- |
-| STEP\_X            | X     | 17       | X ekseni step sinyali                         |
-| DIR\_X             | X     | 18       | X ekseni yön sinyali                          |
-| ENA\_X             | X     | 27       | X ekseni enable                               |
-| STEP\_Y            | Y     | 22       | Y ekseni step                                 |
-| DIR\_Y             | Y     | 23       | Y ekseni yön                                  |
-| ENA\_Y             | Y     | 24       | Y ekseni enable                               |
-| STEP\_Z            | Z     | 5        | Z ekseni step                                 |
-| DIR\_Z             | Z     | 6        | Z ekseni yön                                  |
-| ENA\_Z             | Z     | 13       | Z ekseni enable                               |
-| LIMIT\_X+          | X     | 19       | X ekseni pozitif limit (NC, internal pull-up) |
-| LIMIT\_X-          | X     | 26       | X ekseni negatif limit                        |
-| LIMIT\_Y+          | Y     | 16       | Y ekseni pozitif limit                        |
-| LIMIT\_Y-          | Y     | 20       | Y ekseni negatif limit                        |
-| LIMIT\_Z+          | Z     | 21       | Z ekseni pozitif limit                        |
-| LIMIT\_Z-          | Z     | 12       | Z ekseni negatif limit                        |
-| E-STOP (Emergency) | —     | 4        | Acil durdurma giriş ucu (harici buton)        |
+Arayüz ve IoT Katmanı: Kullanıcının makine ile etkileşime girdiği yerel grafik arayüz (GUI) ve G-code dosyalarını uzaktan yükleyip işleri başlatmayı sağlayan ağ servislerini içerir.
 
-### 1.3. Fiziksel ve Elektriksel Gereksinimler
+3. Elektronik Donanım ve Seçim Gerekçeleri
+3.1. Ana Kontrolcü: Raspberry Pi 4 Model B (4GB)
+Ne İşe Yarar? Sistemin beynidir. LinuxCNC yazılımını çalıştırır, G-code komutlarını yorumlar ve motorları hareket ettirecek STEP/DIR sinyallerini üretir.
 
-* **Topraklama**: PSU GND, Pi GND ve tüm switch/girişlerin ortak topraklama noktasında (DIN ray und terminal bloğunda) birleştirilmesi zorunludur.
-* **Güç Dağılımı**: 24 V PSU’nun +24 V çıkışı TB6600 VCC+ uçlarına, GND çıkışı TB6600 VCC- uçları ve Pi GND’ye dağıtılmalıdır.
-* **Seviye Uyumu**: TB6600 opto-izolatör girişleri 3.3 V TTL sinyalini algılayabilir. Gerekirse 74HCT14 seviye çevirici veya NPN transistörlü buffer kullanılabilir.
-* **EMI Koruması**: STEP/DIR/ENA hatları için shielded twisted-pair, limit switch hatları için twisted-pair önerilir. Sinyal ve güç hatları ayrı kılavuz kanallarında götürülmeli.
-* **Çalışma Ortamı**: ±10–50 °C aralığında, nem <%70, tozdan ari kapalı pano.
-* **Montaj**: Terminal blok ve perf-board panoya sabitlenmeli, titreşim ve darbelere karşı kablo bağlama klipsleri kullanılmalı.
+Neden Seçildi? Yeterli işlem gücü, Linux için geniş topluluk desteği, PREEMPT_RT kerneli ile gerçek zamanlı performansa uygunluğu ve en önemlisi, doğrudan programlanabilir 40 adet GPIO pini sunması sebebiyle ideal bir seçimdir.
 
----
+Örnek Ürün: Raspberry Pi 4 Model B 4GB
 
-### 1.4 Tüm Kablo Bağlantıları
-| Kaynak Cihaz             | Hedef Cihaz          | Sinyal Tipi                                                   | GPIO Pin (BCM)         | Kablo Tipi            | Kablo Kesiti |
-| ------------------------ | -------------------- | ------------------------------------------------------------- | ---------------------- | --------------------- | ------------ |
-| Raspberry Pi GPIO17      | TB6600 X STEP        | STEP\_X                                                       | 17                     | Shielded Twisted-Pair | 26 AWG       |
-| Raspberry Pi GPIO18      | TB6600 X DIR         | DIR\_X                                                        | 18                     | Shielded Twisted-Pair | 26 AWG       |
-| Raspberry Pi GPIO27      | TB6600 X ENA         | ENA\_X                                                        | 27                     | Shielded Twisted-Pair | 26 AWG       |
-| Raspberry Pi GPIO22      | TB6600 Y STEP        | STEP\_Y                                                       | 22                     | Shielded Twisted-Pair | 26 AWG       |
-| Raspberry Pi GPIO23      | TB6600 Y DIR         | DIR\_Y                                                        | 23                     | Shielded Twisted-Pair | 26 AWG       |
-| Raspberry Pi GPIO24      | TB6600 Y ENA         | ENA\_Y                                                        | 24                     | Shielded Twisted-Pair | 26 AWG       |
-| Raspberry Pi GPIO5       | TB6600 Z STEP        | STEP\_Z                                                       | 5                      | Shielded Twisted-Pair | 26 AWG       |
-| Raspberry Pi GPIO6       | TB6600 Z DIR         | DIR\_Z                                                        | 6                      | Shielded Twisted-Pair | 26 AWG       |
-| Raspberry Pi GPIO13      | TB6600 Z ENA         | ENA\_Z                                                        | 13                     | Shielded Twisted-Pair | 26 AWG       |
-| Pi internal +5 V pull-up | Limit Switch (NC)    | LIMIT\_X+/LIMIT\_X-, LIMIT\_Y+/LIMIT\_Y-, LIMIT\_Z+/LIMIT\_Z- | 19, 26, 16, 20, 21, 12 | Twisted-Pair          | 24 AWG       |
-| 24 V PSU +24 V           | TB6600 VCC+          | Power                                                         | –                      | Single Core           | ≥ 1.5 mm²    |
-| 24 V PSU GND             | TB6600 VCC– & Pi GND | Ground                                                        | –                      | Single Core           | ≥ 1.5 mm²    |
+3.2. Step Motor Sürücüleri: TB6600 (x3)
+Ne İşe Yarar? Raspberry Pi'nin ürettiği düşük akımlı mantık sinyallerini (5V), NEMA 23 motorlarını hareket ettirebilecek yüksek akımlı (örn. 2-3A) sinyallere dönüştüren bir amplifikatördür.
 
+Neden Seçildi? Fiyat/performans oranı yüksektir. 4A'e kadar akım desteği, ayarlanabilir mikro-adım (microstepping) özellikleri ile hareket hassasiyetini artırması ve opto-izolasyonlu girişleri sayesinde kontrolcüyü motor gürültüsünden koruması en önemli avantajlarıdır.
 
-## 2. Yazılım ve Kontrol Katmanları
+Örnek Ürün: TB6600 Step Motor Sürücü Kartı
 
-### 2.1. LinuxCNC + pigpio HAL
+3.3. Step Motorlar: NEMA 23 (3.0 Nm) (x3)
+Ne İşe Yarar? Elektriksel darbeleri, X, Y ve Z eksenlerinde hassas dönme hareketine çevirerek makinenin mekanik aksamını hareket ettirir.
 
-* **İşletim Sistemi**: Raspberry Pi OS Lite (64 bit önerilir)
-* **Real-Time Kernel**: `linux-image-rt-arm64` + `linux-headers-rt-arm64`
-* **Yazılımlar**:
+Neden Seçildi? 3.0 Nm tork, küçük ve orta ölçekli hobi/atölye tipi CNC makinelerinin alüminyum, ahşap ve plastik işleme ihtiyaçları için yeterli gücü ve hassasiyeti sunar. NEMA 23, yaygın bulunan bir standarttır.
 
-  * `linuxcnc-hal-python`
-  * `pigpio`, `python3-pigpio`, `libpigpio-dev`
-* **Daemon**: `systemctl enable pigpiod` ile başlatılıp `pigpiod` üzerinden HAL okuma/yazma işlemleri gerçekleştirilir.
-* **HAL Dosyası**: `my_machine.hal` içinde `loadrt pigpio`, `loadrt hal_gpio_pins`, `stepgen` ile üç eksen yapılandırılır.
-* **Latency**: `latency-test` ile jitter <20 µs doğrulanmalı.
+Örnek Ürün: 3 Nm NEMA 23 Step Motor
 
-### 2.2. HMI (Yerel Ekran)
+3.4. Güç Kaynakları: 24V 10A ve 5V 3A+
+Ne İşe Yarar? Sistemin tüm bileşenlerine stabil ve doğru voltajda enerji sağlar.
 
-* **Ekran**: 7"–10" HDMI dokunmatik LCD veya DSI ekran.
-* **Arayüz**: LinuxCNC Axis veya Gmoccapy GUI.
-* **Giriş Kontrolleri**: Dokunmatik veya USB klavye/fare.
+Neden Seçildi? İki ayrı güç kaynağı kullanmak kritik bir tasarım kararıdır.
 
-### 2.3. Web Sunucu ve Uzaktan Kontrol
+24V 10A PSU: Motorların yüksek ve dalgalı akım ihtiyacını karşılar.
 
-* **Sunucu Ortamı**: Python (Flask veya FastAPI) tabanlı, bulut veya yerel Docker konteyner.
-* **Fonksiyonlar**:
+5V 3A+ PSU: Raspberry Pi gibi hassas bir dijital devrenin, motor gürültüsünden etkilenmeden stabil çalışmasını garanti eder. Tek bir kaynaktan dönüştürücü ile 5V elde etmek, motorlar yüke bindiğinde Pi'nin çökmesine neden olabilir.
 
-  * STL dosya upload (Max 50 MB)
-  * JWT tabanlı kimlik doğrulama
-  * Dosya depolama: `/uploads` (roket takım panoya NFS veya Samba da olabilir)
-  * HTTP API: `/slice` endpoint’i → URL al → Raspberry Pi tarafından çekilme
-* **İletişim**: HTTPS (Let’s Encrypt sertifikası)
-* **Veri Formatı**: JSON (durum raporu, %complete, hata mesajları)
+Örnek Ürünler: 24V 10A Metal Kasa Güç Kaynağı ve Raspberry Pi 5.1V 3A Orijinal Güç Adaptörü
 
-### 2.4. Otomasyon Script (Python)
+3.5. Sinyal Tamponu (Buffer): 74HCT245 Entegresi
+Ne İşe Yarar? Raspberry Pi'nin 3.3V'luk GPIO sinyallerini, TB6600 sürücülerinin en kararlı çalıştığı 5V seviyesine yükseltir ve sinyali güçlendirir.
 
-```python
-import requests, subprocess, linuxcnc, logging
+Neden Seçildi? Bu entegre, projenin güvenilirliğinin temel taşıdır. Doğrudan 3.3V bağlantı, özellikle yüksek hızlarda adım kayıplarına neden olabilir. 74HCT serisi, 3.3V giriş sinyalini 5V çıkışa dönüştürmek için özel olarak tasarlanmıştır ve Pi'yi olası bir elektriksel geri tepmeden koruyan ek bir izolasyon katmanı sağlar. Uygulama Notu: Bu entegrenin DIR (Pin 1) ve /OE (Pin 19) pinleri toprağa (GND) bağlanarak yönü ve çıkışları sabitlenmelidir.
 
-logging.basicConfig(level=logging.INFO)
-url = "https://server/uploads/part.stl"
-r = requests.get(url, timeout=30)
-with open("/home/pi/linuxcnc/parts/part.stl","wb") as f:
-    f.write(r.content)
-subprocess.run([
-    "CuraEngine", "slice",
-    "-l", "/home/pi/linuxcnc/parts/part.stl",
-    "-o", "/home/pi/linuxcnc/nc/part.ngc",
-    "--load", "/home/pi/linuxcnc/configs/myprinter.def.json"
-])
-c = linuxcnc.command(); c.mode(linuxcnc.MODE_AUTO); c.file("/home/pi/linuxcnc/nc/part.ngc"); c.run()
-logging.info("Job started")
-```
+Örnek Ürün: 74HCT245 DIP Entegre
 
-### 2.5. Durum Takibi ve Raporlama
+3.6. Güvenlik Bileşenleri: Limit Switch (NC) ve E-Stop Butonu (NC)
+Ne İşe Yarar? Limit switch'ler makinenin fiziksel sınırlarını tanımlar, E-Stop ise acil bir durumda tüm sistemi anında durdurur.
 
-* **GPIO Okumaları**: Limit switch durumları, acil durdurma kontrolleri Python’dan okunup web’e iletilebilir.
-* **JSON API**: `/status` endpoint’i; `{"x":posx, "y":posy, "z":posz, "state":"running"}`
+Neden Seçildi? Her ikisi için de NC (Normally Closed - Normalde Kapalı) tip seçilmesi bir güvenlik standardıdır. Bu sayede, bir switch'in kablosu kopsa veya butonda bir arıza olsa bile devre "açık" konuma geçeceği için sistem bunu bir hata olarak algılar ve kendini durdurur. Bu, fail-safe (hatada güvenli) bir tasarımdır.
 
----
+Örnek Ürünler: CNC Mekanik Limit Switch ve Acil Stop Butonu
 
-## 3. Entegrasyon ve Test Planı
+4. Yazılım Katmanı ve Seçim Gerekçeleri
+4.1. İşletim Sistemi: Raspberry Pi OS Lite (64-bit)
+Ne İşe Yarar? Donanım üzerinde çalışacak temel yazılım platformudur.
 
-1. **Donanım Bağlantı Kontrolü**: Multimetre ile güç ve toprak sürekliliği.
-2. **PIN Fonksiyon Testi**: LED ve butonlarla GPIO doğrulama.
-3. **HAL ve Latency Testi**: `latency-test` araçları.
-4. **Kuru Koşu**: Şaft boşta, düşük hız G-code testi.
-5. **Yük Testi**: Mininal kesici uç takıp hız profili deneyleri.
-6. **IoT İş Akışı**: Web upload → slicing → otomatik başlatma testi.
+Neden Seçildi? "Lite" sürümü, gereksiz grafik arayüzleri ve servisleri barındırmaz. Bu, CNC kontrolü için kritik olan işlemci ve RAM kaynaklarının boşa harcanmasını önler ve sistemin daha kararlı çalışmasını sağlar. 64-bit mimari, modern yazılımlarla uyumluluk ve performans artışı sunar.
 
----
+4.2. Çekirdek (Kernel): PREEMPT_RT Patch
+Ne İşe Yarar? Standart Linux çekirdeğini, bir Gerçek Zamanlı İşletim Sistemine (RTOS) dönüştürür.
 
-**Not:** Bu belge, tüm sistem bileşenlerini ve katmanlarını içeren mühendislik el kitabı niteliğindedir. Her bölüm detaylı protokol ve test adımlarıyla, sahada ve geliştirme aşamasında referans alınabilir.
+Neden Seçildi? CNC kontrolünde motorlara gönderilen STEP sinyallerinin zamanlaması mikrosaniye düzeyinde hassas olmalıdır. Standart bir işletim sistemi, arka plan işlemlerini yürütmek için bu sinyal gönderimini geciktirebilir (bu duruma "jitter" denir). PREEMPT_RT kerneli, bu gecikmeleri minimize ederek (<20-30 µs), motorların adım kaybetmeden, pürüzsüz ve hassas bir şekilde hareket etmesini garanti eder. Bu, projenin olmazsa olmazıdır.
 
+4.3. CNC Kontrol Yazılımı: LinuxCNC
+Ne İşe Yarar? G-code'u yorumlayan, hareket planlaması yapan, kullanıcı arayüzünü sunan ve tüm donanımı yöneten ana CNC yazılım paketidir.
+
+Neden Seçildi? Açık kaynaklı, son derece güçlü ve esnektir. En büyük avantajı HAL (Hardware Abstraction Layer - Donanım Soyutlama Katmanı)'dır. HAL sayesinde, "şu GPIO pini, X ekseninin STEP sinyalidir" gibi donanım bağlantıları basit bir metin dosyası ile tanımlanabilir. Bu, projeyi standart dışı donanımlarla (Raspberry Pi GPIO'ları gibi) uyumlu hale getirir.
+
+4.4. HAL Sürücüsü: pigpio
+Ne İşe Yarar? LinuxCNC'nin HAL katmanı ile Raspberry Pi'nin GPIO pinleri arasında köprü görevi gören özel bir sürücüdür.
+
+Neden Seçildi? pigpio, Raspberry Pi'nin DMA (Direct Memory Access) motorunu kullanır. Bu sayede, STEP sinyallerini üretme işini CPU'dan alıp doğrudan DMA donanımına devreder. Sonuç olarak, CPU başka işlerle meşgulken bile mikrosaniye hassasiyetinde, sıfıra yakın "jitter" ile sinyal üretilebilir. Bu, Raspberry Pi'yi profesyonel bir hareket kontrol kartına en çok yaklaştıran teknolojidir.
+
+5. Sonuç
+Bu rapor, Raspberry Pi tabanlı modern bir CNC kontrol sisteminin tasarımını ve temelini oluşturan mühendislik kararlarını özetlemektedir. Seçilen donanım ve yazılım bileşenleri, aralarındaki sinyal uyumluluğu ve güvenlik katmanları ile birlikte, hem hobi amaçlı kullanıcılar hem de küçük atölyeler için düşük maliyetli, yüksek performanslı ve güvenilir bir platform sunmaktadır. Projenin başarısı, raporda ve bağlantı matrisinde belirtilen topraklama, sinyal tamponlama ve güvenlik devresi prensiplerine titizlikle uyulmasına bağlıdır.
 
