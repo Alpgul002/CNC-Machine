@@ -14,3 +14,11 @@ https://www.youtube.com/watch?v=7oKBdfOEAw0&ab_channel=CADCAMTUTORIALBYMAHTABALA
 https://www.youtube.com/watch?v=xi5Z41rJgPQ&ab_channel=TuanMechanical
 https://www.youtube.com/watch?v=bsoloiIvDjU&ab_channel=CadPractice2024
 https://www.youtube.com/watch?v=2Ra3rYJZgqk&ab_channel=MechanicalEngineering
+
+
+
+27.07.2025
+
+
+
+
